@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"letsgo/config"
@@ -103,79 +101,62 @@ func (h *Handler) ExecuteQuery(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// DeleteRequest represents the request body for DELETE /api/delete
-type DeleteRequest struct {
-	Environment       string `json:"environment"`
-	Table             string `json:"table"`
-	PrimaryKey        string `json:"primaryKey"`
-	PrimaryValue      string `json:"primaryValue"`
-	ConfirmationToken string `json:"confirmationToken"` // SHA256 hash of "DELETE:{env}:{table}:{primaryValue}"
+// UpdateRequest represents the request body for POST /api/update
+type UpdateRequest struct {
+	Environment string                 `json:"environment"`
+	Table       string                 `json:"table"`
+	Item        map[string]interface{} `json:"item"`
 }
 
-// DeleteResponse represents the response for DELETE /api/delete
-type DeleteResponse struct {
+// UpdateResponse represents the response for POST /api/update
+type UpdateResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message,omitempty"`
 	Error   string `json:"error,omitempty"`
 }
 
-// GenerateDeleteToken generates the expected confirmation token for a delete operation
-func GenerateDeleteToken(env, table, primaryValue string) string {
-	data := fmt.Sprintf("DELETE:%s:%s:%s", env, table, primaryValue)
-	hash := sha256.Sum256([]byte(data))
-	return hex.EncodeToString(hash[:])
-}
-
-// DeleteItem handles delete requests with strong confirmation
-func (h *Handler) DeleteItem(w http.ResponseWriter, r *http.Request) {
+// UpdateItem handles update requests
+func (h *Handler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var req DeleteRequest
+	var req UpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		sendDeleteErrorResponse(w, "Invalid request body: "+err.Error())
+		sendUpdateErrorResponse(w, "Invalid request body: "+err.Error())
 		return
 	}
 
 	// Validate environment
 	env := config.Environment(req.Environment)
 	if env != config.NonProdUAT && env != config.PROD {
-		sendDeleteErrorResponse(w, "Invalid environment: "+req.Environment)
+		sendUpdateErrorResponse(w, "Invalid environment: "+req.Environment)
 		return
 	}
 
-	// Validate required fields
-	if req.Table == "" || req.PrimaryKey == "" || req.PrimaryValue == "" {
-		sendDeleteErrorResponse(w, "Missing required fields: table, primaryKey, and primaryValue are required")
+	// Validate item is provided
+	if len(req.Item) == 0 {
+		sendUpdateErrorResponse(w, "Item data is required")
 		return
 	}
 
-	// Verify confirmation token - this ensures the frontend has properly confirmed the deletion
-	expectedToken := GenerateDeleteToken(req.Environment, req.Table, req.PrimaryValue)
-	if req.ConfirmationToken != expectedToken {
-		sendDeleteErrorResponse(w, "Invalid confirmation token. Please confirm the deletion properly.")
-		return
+	// Execute update
+	params := dynamodb.UpdateParams{
+		Environment: env,
+		Table:       req.Table,
+		Item:        req.Item,
 	}
 
-	// Execute deletion
-	params := dynamodb.DeleteParams{
-		Environment:  env,
-		Table:        req.Table,
-		PrimaryKey:   req.PrimaryKey,
-		PrimaryValue: req.PrimaryValue,
-	}
-
-	if err := h.queryService.DeleteItem(r.Context(), params); err != nil {
-		sendDeleteErrorResponse(w, "Failed to delete item: "+err.Error())
+	if err := h.queryService.UpdateItem(r.Context(), params); err != nil {
+		sendUpdateErrorResponse(w, "Failed to update item: "+err.Error())
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(DeleteResponse{
+	json.NewEncoder(w).Encode(UpdateResponse{
 		Success: true,
-		Message: fmt.Sprintf("Successfully deleted item with %s=%s from %s", req.PrimaryKey, req.PrimaryValue, req.Table),
+		Message: fmt.Sprintf("Successfully updated item in %s", req.Table),
 	})
 }
 
@@ -188,10 +169,10 @@ func sendErrorResponse(w http.ResponseWriter, errMsg string) {
 	})
 }
 
-func sendDeleteErrorResponse(w http.ResponseWriter, errMsg string) {
+func sendUpdateErrorResponse(w http.ResponseWriter, errMsg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusBadRequest)
-	json.NewEncoder(w).Encode(DeleteResponse{
+	json.NewEncoder(w).Encode(UpdateResponse{
 		Success: false,
 		Error:   errMsg,
 	})

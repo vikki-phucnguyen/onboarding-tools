@@ -131,38 +131,28 @@ func (s *QueryService) convertItems(items []map[string]types.AttributeValue) ([]
 	return result, nil
 }
 
-// DeleteParams holds the parameters for a delete operation
-type DeleteParams struct {
-	Environment  config.Environment
-	Table        string
-	PrimaryKey   string
-	PrimaryValue string
+// UpdateParams holds the parameters for an update operation
+type UpdateParams struct {
+	Environment config.Environment
+	Table       string
+	Item        map[string]interface{}
 }
 
-// DeleteItem deletes an item from the table
-func (s *QueryService) DeleteItem(ctx context.Context, params DeleteParams) error {
+// UpdateItem updates an item in the table
+func (s *QueryService) UpdateItem(ctx context.Context, params UpdateParams) error {
 	// Get table config
 	tableConfig, ok := s.client.GetConfig().GetTableConfig(params.Environment, params.Table)
 	if !ok {
 		return fmt.Errorf("table %s not found for environment %s", params.Table, params.Environment)
 	}
 
-	// Verify the primary key matches
-	if tableConfig.PrimaryKey != params.PrimaryKey {
-		return fmt.Errorf("invalid primary key: expected %s, got %s", tableConfig.PrimaryKey, params.PrimaryKey)
-	}
-
-	// Build the key
-	av, err := attributevalue.Marshal(params.PrimaryValue)
+	// Convert the item to DynamoDB attribute values
+	av, err := attributevalue.MarshalMap(params.Item)
 	if err != nil {
-		return fmt.Errorf("failed to marshal primary key value: %w", err)
+		return fmt.Errorf("failed to marshal item: %w", err)
 	}
 
-	key := map[string]types.AttributeValue{
-		params.PrimaryKey: av,
-	}
-
-	// Delete the item
-	return s.client.DeleteItem(ctx, tableConfig.Name, key)
+	// Put the item (full replacement)
+	return s.client.PutItem(ctx, tableConfig.Name, av)
 }
 

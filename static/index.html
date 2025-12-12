@@ -66,20 +66,28 @@
                     <span id="result-count" class="result-count"></span>
                 </div>
                 <div class="results-toolbar" id="results-toolbar">
-                    <button type="button" class="toolbar-btn" id="copy-all-btn" title="Copy all results as JSON">
-                        <span>📋</span> Copy All
-                    </button>
-                    <button type="button" class="toolbar-btn" id="expand-all-btn" title="Expand all items">
-                        <span>⬇️</span> Expand All
-                    </button>
-                    <button type="button" class="toolbar-btn" id="collapse-all-btn" title="Collapse all items">
-                        <span>⬆️</span> Collapse All
-                    </button>
-                    <select id="view-mode" class="view-mode-select">
-                        <option value="formatted">Formatted JSON</option>
-                        <option value="compact">Compact JSON</option>
-                        <option value="raw">Raw</option>
-                    </select>
+                    <div class="toolbar-left">
+                        <button type="button" class="toolbar-btn" id="copy-all-btn" title="Copy all results as JSON">
+                            <span>📋</span> Copy All
+                        </button>
+                        <button type="button" class="toolbar-btn" id="expand-all-btn" title="Expand all items">
+                            <span>⬇️</span> Expand
+                        </button>
+                        <button type="button" class="toolbar-btn" id="collapse-all-btn" title="Collapse all items">
+                            <span>⬆️</span> Collapse
+                        </button>
+                        <button type="button" class="toolbar-btn" id="wrap-toggle-btn" title="Toggle word wrap">
+                            <span>↔️</span> Wrap
+                        </button>
+                        <select id="view-mode" class="view-mode-select">
+                            <option value="formatted">Formatted JSON</option>
+                            <option value="compact">Compact JSON</option>
+                            <option value="raw">Raw</option>
+                        </select>
+                    </div>
+                    <div class="toolbar-right">
+                        <input type="text" id="search-key-input" class="search-input" placeholder="🔍 Search key...">
+                    </div>
                 </div>
                 <div id="results-container" class="results-container">
                     <div class="empty-state">
@@ -98,53 +106,38 @@
 
     <div id="toast" class="toast hidden">Copied to clipboard!</div>
 
-    <!-- Delete Confirmation Modal -->
-    <div id="delete-modal" class="modal hidden">
-        <div class="modal-backdrop" onclick="closeDeleteModal()"></div>
-        <div class="modal-content delete-modal-content">
-            <div class="modal-header danger">
-                <h2>⚠️ Confirm Deletion</h2>
-                <button class="modal-close" onclick="closeDeleteModal()">×</button>
+    <!-- Edit Modal -->
+    <div id="edit-modal" class="modal hidden">
+        <div class="modal-backdrop" onclick="closeEditModal()"></div>
+        <div class="modal-content edit-modal-content">
+            <div class="modal-header">
+                <h2>✏️ Edit Item</h2>
+                <button class="modal-close" onclick="closeEditModal()">×</button>
             </div>
             <div class="modal-body">
-                <div class="delete-warning">
-                    <p class="warning-text">You are about to <strong>permanently delete</strong> this item:</p>
-                    <div class="delete-item-info" id="delete-item-info">
-                        <!-- Item info will be inserted here -->
-                    </div>
-                </div>
-
-                <div class="delete-env-warning" id="delete-env-warning">
+                <div class="edit-env-warning" id="edit-env-warning">
                     <!-- Environment warning will be inserted here -->
                 </div>
 
-                <div class="delete-steps">
-                    <div class="delete-step" id="step-1">
-                        <div class="step-header">
-                            <span class="step-number">1</span>
-                            <span class="step-title">Type DELETE to confirm</span>
-                        </div>
-                        <input type="text" id="delete-confirm-input" class="delete-confirm-input"
-                            placeholder="Type DELETE here" autocomplete="off">
-                    </div>
+                <div class="editor-toolbar">
+                    <button type="button" class="toolbar-btn" id="toggle-wrap-btn" onclick="toggleWrap()">
+                        <span>↔️</span> Toggle Wrap
+                    </button>
+                    <button type="button" class="toolbar-btn" onclick="formatEditorJson()">
+                        <span>🎨</span> Format JSON
+                    </button>
+                </div>
 
-                    <div class="delete-step" id="step-2">
-                        <div class="step-header">
-                            <span class="step-number">2</span>
-                            <span class="step-title">Acknowledge the consequences</span>
-                        </div>
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="delete-acknowledge-checkbox">
-                            <span>I understand this action is <strong>irreversible</strong> and the data will be
-                                permanently lost.</span>
-                        </label>
-                    </div>
+                <div class="form-group">
+                    <label for="edit-json">JSON Content</label>
+                    <textarea id="edit-json" class="json-editor" spellcheck="false"></textarea>
+                    <p id="edit-json-error" class="json-error hidden"></p>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
-                <button class="btn btn-danger" id="confirm-delete-btn" disabled onclick="executeDelete()">
-                    🗑️ Delete Permanently
+                <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                <button class="btn btn-primary" id="save-edit-btn" onclick="saveEdit()">
+                    💾 Save Changes
                 </button>
             </div>
         </div>

@@ -41,7 +41,7 @@ func main() {
 	// Setup routes
 	http.HandleFunc("/api/tables", handler.GetTables)
 	http.HandleFunc("/api/query", handler.ExecuteQuery)
-	http.HandleFunc("/api/delete", handler.DeleteItem)
+	http.HandleFunc("/api/update", handler.UpdateItem)
 
 	// Serve static files
 	staticFS, err := fs.Sub(staticFiles, "static")

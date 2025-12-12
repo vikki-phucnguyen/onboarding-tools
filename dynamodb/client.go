@@ -94,14 +94,14 @@ func (c *Client) Query(ctx context.Context, tableName string, indexName string, 
 	}, nil
 }
 
-// DeleteItem deletes an item by primary key
-func (c *Client) DeleteItem(ctx context.Context, tableName string, key map[string]types.AttributeValue) error {
-	_, err := c.db.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+// PutItem creates or updates an item in the table
+func (c *Client) PutItem(ctx context.Context, tableName string, item map[string]types.AttributeValue) error {
+	_, err := c.db.PutItem(ctx, &dynamodb.PutItemInput{
 		TableName: aws.String(tableName),
-		Key:       key,
+		Item:      item,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to delete item: %w", err)
+		return fmt.Errorf("failed to put item: %w", err)
 	}
 	return nil
 }

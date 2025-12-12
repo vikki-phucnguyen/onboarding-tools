@@ -6,7 +6,10 @@ let state = {
     selectedIndex: '',
     currentResults: [],
     viewMode: 'formatted',
-    deleteTarget: null // { index, item, primaryKey, primaryValue }
+    editTarget: null, // { index, item }
+    editorWrap: true,
+    viewerWrap: true,
+    searchQuery: ''
 };
 
 // DOM Elements
@@ -25,19 +28,22 @@ const collapseAllBtn = document.getElementById('collapse-all-btn');
 const viewModeSelect = document.getElementById('view-mode');
 const toast = document.getElementById('toast');
 
-// Delete modal elements
-const deleteModal = document.getElementById('delete-modal');
-const deleteItemInfo = document.getElementById('delete-item-info');
-const deleteEnvWarning = document.getElementById('delete-env-warning');
-const deleteConfirmInput = document.getElementById('delete-confirm-input');
-const deleteAcknowledgeCheckbox = document.getElementById('delete-acknowledge-checkbox');
-const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+// Edit modal elements
+const editModal = document.getElementById('edit-modal');
+const editEnvWarning = document.getElementById('edit-env-warning');
+const editJsonTextarea = document.getElementById('edit-json');
+const editJsonError = document.getElementById('edit-json-error');
+const saveEditBtn = document.getElementById('save-edit-btn');
+const editorToggleWrapBtn = document.getElementById('toggle-wrap-btn');
+
+// Viewer toolbar elements
+const viewerWrapToggleBtn = document.getElementById('wrap-toggle-btn');
+const searchKeyInput = document.getElementById('search-key-input');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
     await loadTables();
     setupEventListeners();
-    setupDeleteModalListeners();
 });
 
 async function loadTables() {
@@ -104,28 +110,24 @@ function setupEventListeners() {
             renderResults();
         }
     });
+
+    // Viewer wrap toggle
+    viewerWrapToggleBtn.addEventListener('click', toggleViewerWrap);
+
+    // Search by key (debounced)
+    let searchTimeout;
+    searchKeyInput.addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            state.searchQuery = searchKeyInput.value.trim().toLowerCase();
+            if (state.currentResults.length > 0) {
+                renderResults();
+            }
+        }, 300);
+    });
 }
 
-function setupDeleteModalListeners() {
-    // Validate delete confirmation input
-    deleteConfirmInput.addEventListener('input', validateDeleteForm);
-    deleteAcknowledgeCheckbox.addEventListener('change', validateDeleteForm);
-}
 
-function validateDeleteForm() {
-    const inputValid = deleteConfirmInput.value.toUpperCase() === 'DELETE';
-    const checkboxValid = deleteAcknowledgeCheckbox.checked;
-
-    // Visual feedback for input
-    if (inputValid) {
-        deleteConfirmInput.classList.add('valid');
-    } else {
-        deleteConfirmInput.classList.remove('valid');
-    }
-
-    // Enable/disable delete button
-    confirmDeleteBtn.disabled = !(inputValid && checkboxValid);
-}
 
 function populateTableSelect() {
     const tables = state.tables[state.environment] || {};
@@ -302,19 +304,20 @@ function renderResults() {
 function renderFormattedView(items) {
     resultsContainer.innerHTML = items.map((item, index) => {
         const title = getItemTitle(item);
-        const jsonContent = formatJSON(item);
+        const parsedItem = parseNestedJsonStrings(item);
+        const jsonContent = formatJSON(parsedItem);
         return `
             <div class="result-item expanded" data-index="${index}">
                 <div class="result-item-header" onclick="toggleItem(this.parentElement)">
                     <span class="result-item-title">${title}</span>
                     <div class="result-item-actions">
                         <button class="copy-item-btn" onclick="event.stopPropagation(); copyItem(${index}, this)">📋 Copy</button>
-                        <button class="delete-item-btn" onclick="event.stopPropagation(); openDeleteModal(${index})">🗑️ Delete</button>
+                        <button class="edit-item-btn" onclick="event.stopPropagation(); openEditModal(${index})">✏️ Edit</button>
                         <span class="result-item-toggle">▼</span>
                     </div>
                 </div>
                 <div class="result-item-body">
-                    <div class="json-viewer">${jsonContent}</div>
+                    <div class="json-viewer${state.viewerWrap ? ' wrap' : ''}">${jsonContent}</div>
                 </div>
             </div>
         `;
@@ -324,19 +327,20 @@ function renderFormattedView(items) {
 function renderCompactView(items) {
     resultsContainer.innerHTML = items.map((item, index) => {
         const title = getItemTitle(item);
-        const jsonContent = JSON.stringify(item);
+        const parsedItem = parseNestedJsonStrings(item);
+        const jsonContent = JSON.stringify(parsedItem);
         return `
             <div class="result-item expanded" data-index="${index}">
                 <div class="result-item-header" onclick="toggleItem(this.parentElement)">
                     <span class="result-item-title">${title}</span>
                     <div class="result-item-actions">
                         <button class="copy-item-btn" onclick="event.stopPropagation(); copyItem(${index}, this)">📋 Copy</button>
-                        <button class="delete-item-btn" onclick="event.stopPropagation(); openDeleteModal(${index})">🗑️ Delete</button>
+                        <button class="edit-item-btn" onclick="event.stopPropagation(); openEditModal(${index})">✏️ Edit</button>
                         <span class="result-item-toggle">▼</span>
                     </div>
                 </div>
                 <div class="result-item-body">
-                    <div class="json-viewer">${escapeHtml(jsonContent)}</div>
+                    <div class="json-viewer${state.viewerWrap ? ' wrap' : ''}">${escapeHtml(jsonContent)}</div>
                 </div>
             </div>
         `;
@@ -344,7 +348,8 @@ function renderCompactView(items) {
 }
 
 function renderRawView(items) {
-    const jsonStr = JSON.stringify(items, null, 2);
+    const parsedItems = items.map(item => parseNestedJsonStrings(item));
+    const jsonStr = JSON.stringify(parsedItems, null, 2);
     resultsContainer.innerHTML = `
         <div class="raw-json-view">
             <pre>${escapeHtml(jsonStr)}</pre>
@@ -392,6 +397,17 @@ function collapseAll() {
     });
 }
 
+function toggleViewerWrap() {
+    state.viewerWrap = !state.viewerWrap;
+    document.querySelectorAll('.json-viewer').forEach(viewer => {
+        viewer.classList.toggle('wrap', state.viewerWrap);
+    });
+    // Update button text
+    viewerWrapToggleBtn.innerHTML = state.viewerWrap
+        ? '<span>↔️</span> Unwrap'
+        : '<span>↔️</span> Wrap';
+}
+
 function copyAllResults() {
     const jsonStr = JSON.stringify(state.currentResults, null, 2);
     copyToClipboard(jsonStr);
@@ -417,91 +433,92 @@ function copyItem(index, button) {
     }, 2000);
 }
 
-// Delete Modal Functions
-function openDeleteModal(index) {
+// Edit Modal Functions
+function openEditModal(index) {
     const item = state.currentResults[index];
-    const keyInfo = getPrimaryKeyForItem(item);
 
-    if (!keyInfo) {
-        showToast('Cannot delete: Primary key not found');
-        return;
-    }
-
-    state.deleteTarget = {
-        index,
-        item,
-        primaryKey: keyInfo.primaryKey,
-        primaryValue: keyInfo.primaryValue
-    };
-
-    // Populate item info
-    deleteItemInfo.innerHTML = `
-        <div class="info-row">
-            <span class="info-label">Environment:</span>
-            <span class="info-value">${state.environment}</span>
-        </div>
-        <div class="info-row">
-            <span class="info-label">Table:</span>
-            <span class="info-value">${state.selectedTable}</span>
-        </div>
-        <div class="info-row">
-            <span class="info-label">${formatFieldName(keyInfo.primaryKey)}:</span>
-            <span class="info-value">${keyInfo.primaryValue}</span>
-        </div>
-    `;
+    state.editTarget = { index, item };
 
     // Show environment-specific warning
     if (state.environment === 'prod') {
-        deleteEnvWarning.className = 'delete-env-warning prod-warning';
-        deleteEnvWarning.innerHTML = `
+        editEnvWarning.className = 'edit-env-warning prod-warning';
+        editEnvWarning.innerHTML = `
             🚨 <strong>PRODUCTION ENVIRONMENT</strong> 🚨<br>
-            This will permanently delete data from the PRODUCTION database!
+            You are editing data in the PRODUCTION database!
         `;
     } else {
-        deleteEnvWarning.className = 'delete-env-warning uat-warning';
-        deleteEnvWarning.innerHTML = `
-            ⚠️ You are deleting from the ${state.environment.toUpperCase()} environment.
+        editEnvWarning.className = 'edit-env-warning uat-warning';
+        editEnvWarning.innerHTML = `
+            ⚠️ Editing in ${state.environment.toUpperCase()} environment.
         `;
     }
 
-    // Reset form
-    deleteConfirmInput.value = '';
-    deleteConfirmInput.classList.remove('valid');
-    deleteAcknowledgeCheckbox.checked = false;
-    confirmDeleteBtn.disabled = true;
+    // Populate editor with formatted JSON (parse nested JSON strings)
+    const parsedItem = parseNestedJsonStrings(item);
+    editJsonTextarea.value = JSON.stringify(parsedItem, null, 2);
+    editJsonError.classList.add('hidden');
+
+    // Apply wrap state
+    if (state.editorWrap) {
+        editJsonTextarea.classList.add('wrap');
+    } else {
+        editJsonTextarea.classList.remove('wrap');
+    }
 
     // Show modal
-    deleteModal.classList.remove('hidden');
-    deleteConfirmInput.focus();
+    editModal.classList.remove('hidden');
+    editJsonTextarea.focus();
 }
 
-function closeDeleteModal() {
-    deleteModal.classList.add('hidden');
-    state.deleteTarget = null;
+function closeEditModal() {
+    editModal.classList.add('hidden');
+    state.editTarget = null;
 }
 
-async function executeDelete() {
-    if (!state.deleteTarget) return;
+function toggleWrap() {
+    state.editorWrap = !state.editorWrap;
+    if (state.editorWrap) {
+        editJsonTextarea.classList.add('wrap');
+    } else {
+        editJsonTextarea.classList.remove('wrap');
+    }
+}
 
-    const { primaryKey, primaryValue } = state.deleteTarget;
+function formatEditorJson() {
+    try {
+        const parsed = JSON.parse(editJsonTextarea.value);
+        editJsonTextarea.value = JSON.stringify(parsed, null, 2);
+        editJsonError.classList.add('hidden');
+    } catch (e) {
+        editJsonError.textContent = 'Invalid JSON: ' + e.message;
+        editJsonError.classList.remove('hidden');
+    }
+}
 
-    // Generate confirmation token (SHA256 hash)
-    const tokenData = `DELETE:${state.environment}:${state.selectedTable}:${primaryValue}`;
-    const confirmationToken = await sha256(tokenData);
+async function saveEdit() {
+    if (!state.editTarget) return;
+
+    // Validate JSON
+    let parsedItem;
+    try {
+        parsedItem = JSON.parse(editJsonTextarea.value);
+    } catch (e) {
+        editJsonError.textContent = 'Invalid JSON: ' + e.message;
+        editJsonError.classList.remove('hidden');
+        return;
+    }
 
     const request = {
         environment: state.environment,
         table: state.selectedTable,
-        primaryKey: primaryKey,
-        primaryValue: primaryValue,
-        confirmationToken: confirmationToken
+        item: parsedItem
     };
 
-    closeDeleteModal();
+    closeEditModal();
     showLoading(true);
 
     try {
-        const response = await fetch('/api/delete', {
+        const response = await fetch('/api/update', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -512,27 +529,19 @@ async function executeDelete() {
         const data = await response.json();
 
         if (data.success) {
-            showToast('Item deleted successfully!');
-            // Remove from current results
-            state.currentResults.splice(state.deleteTarget.index, 1);
+            showToast('Item updated successfully!');
+            // Update local results
+            state.currentResults[state.editTarget.index] = parsedItem;
             renderResults();
         } else {
-            showToast('Delete failed: ' + data.error);
+            showToast('Update failed: ' + data.error);
         }
     } catch (error) {
-        showToast('Delete failed: ' + error.message);
+        showToast('Update failed: ' + error.message);
     } finally {
         showLoading(false);
-        state.deleteTarget = null;
+        state.editTarget = null;
     }
-}
-
-// SHA256 hash function
-async function sha256(message) {
-    const msgBuffer = new TextEncoder().encode(message);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 function copyToClipboard(text) {
@@ -567,6 +576,43 @@ function hideToolbar() {
     resultsToolbar.classList.remove('visible');
 }
 
+// Recursively parse JSON strings within an object
+function parseNestedJsonStrings(obj) {
+    if (obj === null || obj === undefined) {
+        return obj;
+    }
+
+    if (typeof obj === 'string') {
+        // Try to parse as JSON if it looks like JSON
+        const trimmed = obj.trim();
+        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+            (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+            try {
+                const parsed = JSON.parse(trimmed);
+                return parseNestedJsonStrings(parsed);
+            } catch (e) {
+                // Not valid JSON, return as is
+                return obj;
+            }
+        }
+        return obj;
+    }
+
+    if (Array.isArray(obj)) {
+        return obj.map(item => parseNestedJsonStrings(item));
+    }
+
+    if (typeof obj === 'object') {
+        const result = {};
+        for (const [key, value] of Object.entries(obj)) {
+            result[key] = parseNestedJsonStrings(value);
+        }
+        return result;
+    }
+
+    return obj;
+}
+
 function formatJSON(obj, indent = 0) {
     const spaces = '  '.repeat(indent);
 
@@ -597,7 +643,9 @@ function formatJSON(obj, indent = 0) {
         if (entries.length === 0) return '{}';
 
         const items = entries.map(([key, value]) => {
-            return `${spaces}  <span class="json-key">"${escapeHtml(key)}"</span>: ${formatJSON(value, indent + 1)}`;
+            const keyLower = key.toLowerCase();
+            const highlight = state.searchQuery && keyLower.includes(state.searchQuery) ? ' highlight' : '';
+            return `${spaces}  <span class="json-key${highlight}">"${escapeHtml(key)}"</span>: ${formatJSON(value, indent + 1)}`;
         });
         return `{\n${items.join(',\n')}\n${spaces}}`;
     }
