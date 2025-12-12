@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DynamoDB Query Tool</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>🔍 DynamoDB Query Tool</h1>
+            <p class="subtitle">Query prospect and progress tables across environments</p>
+        </header>
+
+        <main>
+            <div class="query-panel">
+                <div class="form-section">
+                    <h2>Query Configuration</h2>
+
+                    <div class="form-group">
+                        <label>Environment</label>
+                        <div class="environment-selector">
+                            <button type="button" class="env-btn active" data-env="non-prod-uat">
+                                <span class="env-dot uat"></span>
+                                Non-Prod UAT
+                            </button>
+                            <button type="button" class="env-btn" data-env="prod">
+                                <span class="env-dot prod"></span>
+                                PROD
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="table-select">Table</label>
+                        <select id="table-select">
+                            <option value="">Select a table...</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="index-select">Query By</label>
+                        <select id="index-select" disabled>
+                            <option value="">Select table first...</option>
+                        </select>
+                    </div>
+
+                    <div id="query-fields" class="query-fields">
+                        <!-- Dynamic fields will be inserted here -->
+                    </div>
+
+                    <button type="button" id="execute-btn" class="execute-btn" disabled>
+                        <span class="btn-icon">▶</span>
+                        Execute Query
+                    </button>
+                </div>
+            </div>
+
+            <div class="results-panel">
+                <div class="results-header">
+                    <h2>Results</h2>
+                    <span id="result-count" class="result-count"></span>
+                </div>
+                <div class="results-toolbar" id="results-toolbar">
+                    <button type="button" class="toolbar-btn" id="copy-all-btn" title="Copy all results as JSON">
+                        <span>📋</span> Copy All
+                    </button>
+                    <button type="button" class="toolbar-btn" id="expand-all-btn" title="Expand all items">
+                        <span>⬇️</span> Expand All
+                    </button>
+                    <button type="button" class="toolbar-btn" id="collapse-all-btn" title="Collapse all items">
+                        <span>⬆️</span> Collapse All
+                    </button>
+                    <select id="view-mode" class="view-mode-select">
+                        <option value="formatted">Formatted JSON</option>
+                        <option value="compact">Compact JSON</option>
+                        <option value="raw">Raw</option>
+                    </select>
+                </div>
+                <div id="results-container" class="results-container">
+                    <div class="empty-state">
+                        <span class="empty-icon">📋</span>
+                        <p>Execute a query to see results</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="spinner"></div>
+        <p>Executing query...</p>
+    </div>
+
+    <div id="toast" class="toast hidden">Copied to clipboard!</div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="delete-modal" class="modal hidden">
+        <div class="modal-backdrop" onclick="closeDeleteModal()"></div>
+        <div class="modal-content delete-modal-content">
+            <div class="modal-header danger">
+                <h2>⚠️ Confirm Deletion</h2>
+                <button class="modal-close" onclick="closeDeleteModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="delete-warning">
+                    <p class="warning-text">You are about to <strong>permanently delete</strong> this item:</p>
+                    <div class="delete-item-info" id="delete-item-info">
+                        <!-- Item info will be inserted here -->
+                    </div>
+                </div>
+
+                <div class="delete-env-warning" id="delete-env-warning">
+                    <!-- Environment warning will be inserted here -->
+                </div>
+
+                <div class="delete-steps">
+                    <div class="delete-step" id="step-1">
+                        <div class="step-header">
+                            <span class="step-number">1</span>
+                            <span class="step-title">Type DELETE to confirm</span>
+                        </div>
+                        <input type="text" id="delete-confirm-input" class="delete-confirm-input"
+                            placeholder="Type DELETE here" autocomplete="off">
+                    </div>
+
+                    <div class="delete-step" id="step-2">
+                        <div class="step-header">
+                            <span class="step-number">2</span>
+                            <span class="step-title">Acknowledge the consequences</span>
+                        </div>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="delete-acknowledge-checkbox">
+                            <span>I understand this action is <strong>irreversible</strong> and the data will be
+                                permanently lost.</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+                <button class="btn btn-danger" id="confirm-delete-btn" disabled onclick="executeDelete()">
+                    🗑️ Delete Permanently
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+
+</html>
