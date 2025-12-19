@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DynamoDB JSON Converter</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0f0f23;
+            --bg-secondary: #1a1a2e;
+            --bg-tertiary: #16213e;
+            --accent-primary: #00d4ff;
+            --accent-secondary: #7b2cbf;
+            --accent-gradient: linear-gradient(135deg, #00d4ff 0%, #7b2cbf 100%);
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0b0;
+            --border-color: #2a2a4a;
+            --success-color: #00ff88;
+            --error-color: #ff4757;
+            --shadow-glow: 0 0 40px rgba(0, 212, 255, 0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-primary);
+            min-height: 100vh;
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        .background-effects {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.4;
+            animation: float 20s ease-in-out infinite;
+        }
+
+        .orb-1 {
+            width: 400px;
+            height: 400px;
+            background: var(--accent-primary);
+            top: -100px;
+            right: -100px;
+        }
+
+        .orb-2 {
+            width: 300px;
+            height: 300px;
+            background: var(--accent-secondary);
+            bottom: -50px;
+            left: -50px;
+            animation-delay: -10s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(30px, -30px) scale(1.05); }
+            66% { transform: translate(-20px, 20px) scale(0.95); }
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .logo-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--accent-gradient);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: var(--shadow-glow);
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            margin-top: 8px;
+        }
+
+        .tabs-container {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            box-shadow: var(--shadow-glow);
+        }
+
+        .tabs-header {
+            display: flex;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 16px 24px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-family: 'Inter', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .tab-btn.active {
+            color: var(--accent-primary);
+            background: var(--bg-secondary);
+        }
+
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--accent-gradient);
+        }
+
+        .tab-btn i {
+            margin-right: 8px;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 24px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .converter-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 900px) {
+            .converter-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .editor-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .panel-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-icon {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-icon:hover {
+            background: var(--border-color);
+            color: var(--text-primary);
+            transform: translateY(-1px);
+        }
+
+        .btn-icon.success {
+            border-color: var(--success-color);
+            color: var(--success-color);
+        }
+
+        textarea {
+            width: 100%;
+            height: 400px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+            color: var(--text-primary);
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            resize: vertical;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+        }
+
+        textarea::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.5;
+        }
+
+        .action-bar {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin-top: 24px;
+        }
+
+        .btn-primary {
+            background: var(--accent-gradient);
+            border: none;
+            color: var(--text-primary);
+            padding: 14px 32px;
+            border-radius: 12px;
+            font-family: 'Inter', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(0, 212, 255, 0.4);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 14px 32px;
+            border-radius: 12px;
+            font-family: 'Inter', sans-serif;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+        }
+
+        .status-bar {
+            margin-top: 16px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            display: none;
+        }
+
+        .status-bar.error {
+            display: block;
+            background: rgba(255, 71, 87, 0.1);
+            border: 1px solid var(--error-color);
+            color: var(--error-color);
+        }
+
+        .status-bar.success {
+            display: block;
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid var(--success-color);
+            color: var(--success-color);
+        }
+
+        .info-section {
+            margin-top: 40px;
+            padding: 24px;
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+        }
+
+        .info-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--accent-primary);
+        }
+
+        .type-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+        }
+
+        .type-card {
+            background: var(--bg-primary);
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .type-card code {
+            color: var(--accent-primary);
+            font-weight: 600;
+        }
+
+        .type-card span {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--success-color);
+            color: var(--success-color);
+            padding: 16px 24px;
+            border-radius: 12px;
+            font-weight: 500;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="background-effects">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+    </div>
+
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">⚡</div>
+                <h1>DynamoDB JSON Converter</h1>
+            </div>
+            <p class="subtitle">Transform DynamoDB JSON format to standard JSON with ease</p>
+        </header>
+
+        <div class="tabs-container">
+            <div class="tabs-header">
+                <button class="tab-btn active" data-tab="dynamo-to-json">
+                    🔄 DynamoDB → JSON
+                </button>
+                <button class="tab-btn" data-tab="json-to-dynamo">
+                    🔃 JSON → DynamoDB
+                </button>
+            </div>
+
+            <!-- DynamoDB to JSON Tab -->
+            <div id="dynamo-to-json" class="tab-content active">
+                <div class="converter-grid">
+                    <div class="editor-panel">
+                        <div class="panel-header">
+                            <span class="panel-title">📥 DynamoDB JSON Input</span>
+                            <div class="panel-actions">
+                                <button class="btn-icon" onclick="loadSample('dynamo')">
+                                    📋 Sample
+                                </button>
+                                <button class="btn-icon" onclick="clearInput('dynamoInput')">
+                                    🗑️ Clear
+                                </button>
+                            </div>
+                        </div>
+                        <textarea id="dynamoInput" placeholder='Paste your DynamoDB JSON here...
+
+Example:
+{
+  "name": { "S": "John" },
+  "age": { "N": "25" }
+}'></textarea>
+                    </div>
+
+                    <div class="editor-panel">
+                        <div class="panel-header">
+                            <span class="panel-title">📤 Normal JSON Output</span>
+                            <div class="panel-actions">
+                                <button class="btn-icon" onclick="copyOutput('jsonOutput')">
+                                    📋 Copy
+                                </button>
+                                <button class="btn-icon" onclick="downloadOutput('jsonOutput', 'converted.json')">
+                                    ⬇️ Download
+                                </button>
+                            </div>
+                        </div>
+                        <textarea id="jsonOutput" readonly placeholder="Converted JSON will appear here..."></textarea>
+                    </div>
+                </div>
+
+                <div class="action-bar">
+                    <button class="btn-secondary" onclick="formatInput('dynamoInput')">Format Input</button>
+                    <button class="btn-primary" onclick="convertDynamoToJson()">🚀 Convert to JSON</button>
+                </div>
+
+                <div id="dynamoStatus" class="status-bar"></div>
+            </div>
+
+            <!-- JSON to DynamoDB Tab -->
+            <div id="json-to-dynamo" class="tab-content">
+                <div class="converter-grid">
+                    <div class="editor-panel">
+                        <div class="panel-header">
+                            <span class="panel-title">📥 Normal JSON Input</span>
+                            <div class="panel-actions">
+                                <button class="btn-icon" onclick="loadSample('json')">
+                                    📋 Sample
+                                </button>
+                                <button class="btn-icon" onclick="clearInput('normalJsonInput')">
+                                    🗑️ Clear
+                                </button>
+                            </div>
+                        </div>
+                        <textarea id="normalJsonInput" placeholder='Paste your normal JSON here...
+
+Example:
+{
+  "name": "John",
+  "age": 25
+}'></textarea>
+                    </div>
+
+                    <div class="editor-panel">
+                        <div class="panel-header">
+                            <span class="panel-title">📤 DynamoDB JSON Output</span>
+                            <div class="panel-actions">
+                                <button class="btn-icon" onclick="copyOutput('dynamoOutput')">
+                                    📋 Copy
+                                </button>
+                                <button class="btn-icon" onclick="downloadOutput('dynamoOutput', 'dynamo.json')">
+                                    ⬇️ Download
+                                </button>
+                            </div>
+                        </div>
+                        <textarea id="dynamoOutput" readonly placeholder="DynamoDB JSON will appear here..."></textarea>
+                    </div>
+                </div>
+
+                <div class="action-bar">
+                    <button class="btn-secondary" onclick="formatInput('normalJsonInput')">Format Input</button>
+                    <button class="btn-primary" onclick="convertJsonToDynamo()">🚀 Convert to DynamoDB</button>
+                </div>
+
+                <div id="jsonStatus" class="status-bar"></div>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <h3 class="info-title">📚 DynamoDB Type Reference</h3>
+            <div class="type-grid">
+                <div class="type-card"><code>S</code> <span>→ String</span></div>
+                <div class="type-card"><code>N</code> <span>→ Number</span></div>
+                <div class="type-card"><code>B</code> <span>→ Binary</span></div>
+                <div class="type-card"><code>BOOL</code> <span>→ Boolean</span></div>
+                <div class="type-card"><code>NULL</code> <span>→ Null</span></div>
+                <div class="type-card"><code>L</code> <span>→ List/Array</span></div>
+                <div class="type-card"><code>M</code> <span>→ Map/Object</span></div>
+                <div class="type-card"><code>SS</code> <span>→ String Set</span></div>
+                <div class="type-card"><code>NS</code> <span>→ Number Set</span></div>
+                <div class="type-card"><code>BS</code> <span>→ Binary Set</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast">Copied to clipboard!</div>
+
+    <script>
+        // Tab switching
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                btn.classList.add('active');
+                document.getElementById(btn.dataset.tab).classList.add('active');
+            });
+        });
+
+        // Convert DynamoDB JSON to normal JSON
+        function dynamoToNormal(obj) {
+            if (obj === null || obj === undefined) {
+                return null;
+            }
+
+            if (typeof obj !== 'object') {
+                return obj;
+            }
+
+            if (Array.isArray(obj)) {
+                return obj.map(item => dynamoToNormal(item));
+            }
+
+            const keys = Object.keys(obj);
+            
+            // Check if this is a DynamoDB type wrapper
+            if (keys.length === 1) {
+                const key = keys[0];
+                const value = obj[key];
+
+                switch (key) {
+                    case 'S':
+                        // Try to parse as JSON if it looks like a JSON string
+                        if (typeof value === 'string' && (value.startsWith('{') || value.startsWith('['))) {
+                            try {
+                                return JSON.parse(value);
+                            } catch (e) {
+                                return value;
+                            }
+                        }
+                        return value;
+                    case 'N':
+                        return parseFloat(value);
+                    case 'B':
+                        return value; // Binary as-is (base64)
+                    case 'BOOL':
+                        return value;
+                    case 'NULL':
+                        return null;
+                    case 'L':
+                        return value.map(item => dynamoToNormal(item));
+                    case 'M':
+                        const result = {};
+                        for (const [k, v] of Object.entries(value)) {
+                            result[k] = dynamoToNormal(v);
+                        }
+                        return result;
+                    case 'SS':
+                        return value; // String set as array
+                    case 'NS':
+                        return value.map(n => parseFloat(n));
+                    case 'BS':
+                        return value; // Binary set as-is
+                }
+            }
+
+            // Regular object, process recursively
+            const result = {};
+            for (const [key, value] of Object.entries(obj)) {
+                result[key] = dynamoToNormal(value);
+            }
+            return result;
+        }
+
+        // Convert normal JSON to DynamoDB JSON
+        function normalToDynamo(obj) {
+            if (obj === null || obj === undefined) {
+                return { NULL: true };
+            }
+
+            if (typeof obj === 'string') {
+                return { S: obj };
+            }
+
+            if (typeof obj === 'number') {
+                return { N: obj.toString() };
+            }
+
+            if (typeof obj === 'boolean') {
+                return { BOOL: obj };
+            }
+
+            if (Array.isArray(obj)) {
+                return { L: obj.map(item => normalToDynamo(item)) };
+            }
+
+            if (typeof obj === 'object') {
+                const result = {};
+                for (const [key, value] of Object.entries(obj)) {
+                    result[key] = normalToDynamo(value);
+                }
+                return { M: result };
+            }
+
+            return obj;
+        }
+
+        function convertDynamoToJson() {
+            const input = document.getElementById('dynamoInput').value;
+            const output = document.getElementById('jsonOutput');
+            const status = document.getElementById('dynamoStatus');
+
+            try {
+                const parsed = JSON.parse(input);
+                const converted = dynamoToNormal(parsed);
+                output.value = JSON.stringify(converted, null, 2);
+                
+                status.className = 'status-bar success';
+                status.textContent = '✅ Successfully converted DynamoDB JSON to normal JSON!';
+            } catch (e) {
+                status.className = 'status-bar error';
+                status.textContent = '❌ Error: ' + e.message;
+                output.value = '';
+            }
+        }
+
+        function convertJsonToDynamo() {
+            const input = document.getElementById('normalJsonInput').value;
+            const output = document.getElementById('dynamoOutput');
+            const status = document.getElementById('jsonStatus');
+
+            try {
+                const parsed = JSON.parse(input);
+                const converted = normalToDynamo(parsed);
+                // For top-level, we might not want the M wrapper if it's already an object
+                const finalOutput = parsed === null ? { NULL: true } : 
+                    (typeof parsed === 'object' && !Array.isArray(parsed)) ? 
+                        Object.fromEntries(Object.entries(parsed).map(([k, v]) => [k, normalToDynamo(v)])) :
+                        converted;
+                output.value = JSON.stringify(finalOutput, null, 2);
+                
+                status.className = 'status-bar success';
+                status.textContent = '✅ Successfully converted to DynamoDB JSON format!';
+            } catch (e) {
+                status.className = 'status-bar error';
+                status.textContent = '❌ Error: ' + e.message;
+                output.value = '';
+            }
+        }
+
+        function formatInput(inputId) {
+            const input = document.getElementById(inputId);
+            try {
+                const parsed = JSON.parse(input.value);
+                input.value = JSON.stringify(parsed, null, 2);
+                showToast('Formatted successfully!');
+            } catch (e) {
+                showToast('Invalid JSON!');
+            }
+        }
+
+        function clearInput(inputId) {
+            document.getElementById(inputId).value = '';
+        }
+
+        function copyOutput(outputId) {
+            const output = document.getElementById(outputId);
+            if (output.value) {
+                navigator.clipboard.writeText(output.value);
+                showToast('Copied to clipboard!');
+            }
+        }
+
+        function downloadOutput(outputId, filename) {
+            const output = document.getElementById(outputId);
+            if (output.value) {
+                const blob = new Blob([output.value], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('Downloaded ' + filename);
+            }
+        }
+
+        function loadSample(type) {
+            if (type === 'dynamo') {
+                document.getElementById('dynamoInput').value = JSON.stringify({
+                    "TNC_ACCEPTED_LIST": {
+                        "L": [
+                            {
+                                "M": {
+                                    "data": {
+                                        "S": "{\"tcAcceptTimestampEpochMillisecond\":1765426319840,\"tcVersion\":\"2.0.0\",\"tcProduct\":\"DATA\"}"
+                                    },
+                                    "session": { "S": "f4d7a5e6-56f7-451b-a0ac-d1f6251d9cde" },
+                                    "timestamp": { "N": "1765426585161" }
+                                }
+                            }
+                        ]
+                    }
+                }, null, 2);
+            } else {
+                document.getElementById('normalJsonInput').value = JSON.stringify({
+                    "name": "John Doe",
+                    "age": 30,
+                    "active": true,
+                    "tags": ["developer", "designer"],
+                    "metadata": {
+                        "created": "2024-01-01",
+                        "version": 1
+                    }
+                }, null, 2);
+            }
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2000);
+        }
+
+        // Keyboard shortcut
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                const activeTab = document.querySelector('.tab-content.active');
+                if (activeTab.id === 'dynamo-to-json') {
+                    convertDynamoToJson();
+                } else {
+                    convertJsonToDynamo();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
