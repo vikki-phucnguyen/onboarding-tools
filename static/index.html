@@ -313,6 +313,7 @@
             color: var(--text-secondary, #a0a0b0);
         }
 
+
         /* Adjust query tool container */
         #query-tool-panel {
             border: 1px solid var(--border-color, #2a2a4a);
@@ -430,14 +431,7 @@
 
         <!-- JSON Converter Panel -->
         <div id="json-converter-panel" class="tool-panel">
-            <div class="converter-tabs">
-                <button class="converter-tab active" onclick="switchConverterTab('dynamo-to-json')">
-                    🔄 DynamoDB → JSON
-                </button>
-                <button class="converter-tab" onclick="switchConverterTab('json-to-dynamo')">
-                    🔃 JSON → DynamoDB
-                </button>
-            </div>
+
 
             <!-- DynamoDB to JSON -->
             <div id="dynamo-to-json" class="converter-content active">
@@ -479,65 +473,25 @@ Example:
                 </div>
 
                 <div id="dynamoStatus" class="converter-status"></div>
-            </div>
 
-            <!-- JSON to DynamoDB -->
-            <div id="json-to-dynamo" class="converter-content">
-                <div class="converter-grid">
-                    <div class="editor-panel">
-                        <div class="panel-header">
-                            <span class="panel-title">📥 Normal JSON Input</span>
-                            <div class="panel-actions">
-                                <button class="btn-small" onclick="loadSample('json')">📋 Sample</button>
-                                <button class="btn-small" onclick="clearInput('normalJsonInput')">🗑️ Clear</button>
-                            </div>
-                        </div>
-                        <textarea id="normalJsonInput" class="json-textarea" placeholder='Paste your normal JSON here...
-
-Example:
-{
-  "name": "John",
-  "age": 25
-}'></textarea>
-                    </div>
-
-                    <div class="editor-panel">
-                        <div class="panel-header">
-                            <span class="panel-title">📤 DynamoDB JSON Output</span>
-                            <div class="panel-actions">
-                                <button class="btn-small" onclick="copyOutput('dynamoOutput')">📋 Copy</button>
-                                <button class="btn-small" onclick="downloadOutput('dynamoOutput', 'dynamo.json')">⬇️
-                                    Download</button>
-                            </div>
-                        </div>
-                        <textarea id="dynamoOutput" class="json-textarea" readonly
-                            placeholder="DynamoDB JSON will appear here..."></textarea>
+                <div class="type-reference">
+                    <h3 class="type-reference-title">📚 DynamoDB Type Reference</h3>
+                    <div class="type-grid">
+                        <div class="type-card"><code>S</code> <span>→ String</span></div>
+                        <div class="type-card"><code>N</code> <span>→ Number</span></div>
+                        <div class="type-card"><code>B</code> <span>→ Binary</span></div>
+                        <div class="type-card"><code>BOOL</code> <span>→ Boolean</span></div>
+                        <div class="type-card"><code>NULL</code> <span>→ Null</span></div>
+                        <div class="type-card"><code>L</code> <span>→ List</span></div>
+                        <div class="type-card"><code>M</code> <span>→ Map</span></div>
+                        <div class="type-card"><code>SS</code> <span>→ String Set</span></div>
+                        <div class="type-card"><code>NS</code> <span>→ Number Set</span></div>
+                        <div class="type-card"><code>BS</code> <span>→ Binary Set</span></div>
                     </div>
                 </div>
-
-                <div class="converter-actions">
-                    <button class="btn-format" onclick="formatInput('normalJsonInput')">Format Input</button>
-                    <button class="btn-convert" onclick="convertJsonToDynamo()">🚀 Convert to DynamoDB</button>
-                </div>
-
-                <div id="jsonStatus" class="converter-status"></div>
             </div>
 
-            <div class="type-reference">
-                <h3 class="type-reference-title">📚 DynamoDB Type Reference</h3>
-                <div class="type-grid">
-                    <div class="type-card"><code>S</code> <span>→ String</span></div>
-                    <div class="type-card"><code>N</code> <span>→ Number</span></div>
-                    <div class="type-card"><code>B</code> <span>→ Binary</span></div>
-                    <div class="type-card"><code>BOOL</code> <span>→ Boolean</span></div>
-                    <div class="type-card"><code>NULL</code> <span>→ Null</span></div>
-                    <div class="type-card"><code>L</code> <span>→ List</span></div>
-                    <div class="type-card"><code>M</code> <span>→ Map</span></div>
-                    <div class="type-card"><code>SS</code> <span>→ String Set</span></div>
-                    <div class="type-card"><code>NS</code> <span>→ Number Set</span></div>
-                    <div class="type-card"><code>BS</code> <span>→ Binary Set</span></div>
-                </div>
-            </div>
+
         </div>
     </div>
 
@@ -605,7 +559,40 @@ Example:
             document.getElementById(tab).classList.add('active');
         }
 
-        // DynamoDB to Normal JSON conversion
+        // Recursively flatten any JSON strings found in an object
+        function deepFlattenJsonStrings(obj) {
+            if (obj === null || obj === undefined) return null;
+
+            if (typeof obj === 'string') {
+                // Try to parse as JSON if it looks like JSON
+                if (obj.startsWith('{') || obj.startsWith('[')) {
+                    try {
+                        const parsed = JSON.parse(obj);
+                        // Recursively flatten the parsed result
+                        return deepFlattenJsonStrings(parsed);
+                    } catch (e) {
+                        return obj;
+                    }
+                }
+                return obj;
+            }
+
+            if (Array.isArray(obj)) {
+                return obj.map(item => deepFlattenJsonStrings(item));
+            }
+
+            if (typeof obj === 'object') {
+                const result = {};
+                for (const [key, value] of Object.entries(obj)) {
+                    result[key] = deepFlattenJsonStrings(value);
+                }
+                return result;
+            }
+
+            return obj;
+        }
+
+        // DynamoDB to Normal JSON conversion with deep flattening of nested JSON strings
         function dynamoToNormal(obj) {
             if (obj === null || obj === undefined) return null;
             if (typeof obj !== 'object') return obj;
@@ -617,8 +604,15 @@ Example:
                 const value = obj[key];
                 switch (key) {
                     case 'S':
+                        // For strings, try to parse as JSON and recursively flatten
                         if (typeof value === 'string' && (value.startsWith('{') || value.startsWith('['))) {
-                            try { return JSON.parse(value); } catch (e) { return value; }
+                            try {
+                                const parsed = JSON.parse(value);
+                                // Recursively flatten any nested JSON strings in the parsed object
+                                return deepFlattenJsonStrings(parsed);
+                            } catch (e) {
+                                return value;
+                            }
                         }
                         return value;
                     case 'N': return parseFloat(value);
@@ -750,14 +744,6 @@ Example:
                             }
                         ]
                     }
-                }, null, 2);
-            } else {
-                document.getElementById('normalJsonInput').value = JSON.stringify({
-                    "name": "John Doe",
-                    "age": 30,
-                    "active": true,
-                    "tags": ["developer", "designer"],
-                    "metadata": { "created": "2024-01-01", "version": 1 }
                 }, null, 2);
             }
         }
